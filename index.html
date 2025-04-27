@@ -1,102 +1,119 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GameWorld</title>
-<style>
-body {
-margin: 0;
-font-family: Arial, sans-serif;
-background: #f2f2f2;
-}
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>GameWorld</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f2f2f2;
+      padding-bottom: 40px; /* Added padding to prevent footer overlap */
+    }
 
-      
-header {
-  background: linear-gradient(to right, #7b2ff7, #f107a3);
-  color: white;
-  text-align: center;
-  padding: 40px 0; /* Increased header padding for more space below */
-  font-size: 32px;
-  font-weight: bold;
-  margin-bottom: 20px; /* Added margin below the header */
-}
+    header {
+      background: linear-gradient(to right, #7b2ff7, #f107a3);
+      color: white;
+      text-align: center;
+      padding: 40px 0;
+      font-size: 32px;
+      font-weight: bold;
+      margin-bottom: 20px;
+    }
 
-.games-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  row-gap: 60px; /* Increased vertical spacing for PC */
-  column-gap: 5px; /* Further reduced horizontal spacing for PC */
-  padding: 30px 20px; /* Adjusted padding for better spacing */
-  justify-items: center;
-}
+    /* Grid Layout */
+    .games-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr); /* 3 columns by default */
+      row-gap: 40px; /* Adjusted vertical spacing */
+      column-gap: 15px; /* Adjusted horizontal spacing */
+      padding: 20px;
+      justify-items: center;
+    }
 
-.games-grid a {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  border-radius: 15px;
-  background: white;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-  transition: transform 0.3s, box-shadow 0.3s;
-  width: 160px;
-  height: 160px;
-  text-decoration: none;
-}
+    .games-grid a {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      border-radius: 15px;
+      background: white;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      transition: transform 0.3s, box-shadow 0.3s;
+      width: 100%;
+      max-width: 160px; /* Max width for images */
+      height: 160px;
+      text-decoration: none;
+    }
 
-.games-grid a:hover {
-  transform: scale(1.05);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
-}
+    .games-grid a:hover {
+      transform: scale(1.05);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+    }
 
-.games-grid img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
+    .games-grid img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
 
-footer {
-  text-align: center;
-  padding: 20px 10px;
-  font-size: 14px;
-  color: #666;
-}
+    footer {
+      text-align: center;
+      padding: 20px 10px;
+      font-size: 14px;
+      color: #666;
+      position: relative; /* By default, make footer flow with content */
+      bottom: 0;
+      width: 100%;
+    }
 
-/* Mobile adjustments */
-@media (max-width: 768px) {
-  .games-grid {
-    grid-template-columns: repeat(2, 1fr); /* Switch to 2 columns on mobile */
-    row-gap: 90px; /* Further increased vertical spacing for mobile */
-    column-gap: 15px; /* Slightly increased horizontal spacing for mobile */
-    padding: 20px 10px; /* Adjust padding for mobile */
-  }
+    /* Mobile adjustments */
+    @media (max-width: 768px) {
+      .games-grid {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); /* 2 columns for mobile */
+        row-gap: 30px; /* Reduced vertical gap for mobile */
+        padding: 10px; /* Reduced padding for mobile */
+      }
 
-  .games-grid a {
-    width: 140px; /* Slightly smaller boxes on mobile */
-    height: 140px;
-  }
-}
+      .games-grid a {
+        max-width: 140px; /* Smaller box size on mobile */
+        height: 140px;
+      }
 
-    
+      footer {
+        position: fixed; /* Fix footer to the bottom on smaller screens */
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background-color: #f2f2f2;
+      }
+    }
 
+    /* Prevent scrolling */
+    html, body {
+      height: 100%;
+    }
 
-</style>
+    .games-grid {
+      flex-grow: 1;
+    }
+  </style>
 </head>
 <body>
-<header>
-GameWorld
-</header>
-<div class="games-grid">
-<a href="egggame.html"><img src="egg.jpg" alt="Egg Catcher"></a>
-<a href="flappy.html"><img src="flappy.jpg" alt="Angry Bird"></a>
-<a href="pong.html"><img src="pong.jpg" alt="Ping Pong"></a>
-<a href="space.html"><img src="space.jpg" alt="Space Shooter"></a>
-<a href="tictac.html"><img src="xo.jpg" alt="Tic Tac Toe"></a>
-<a href="rock.html"><img src="rock.jpg" alt="Rock Paper Scissors"></a>
-</div>
-<footer>
-© 2025 ASKINFOTECH. All rights reserved.
-</footer>
+  <header>
+    GameWorld
+  </header>
+  <div class="games-grid">
+    <a href="egggame.html"><img src="egg.jpg" alt="Egg Catcher"></a>
+    <a href="flappy.html"><img src="flappy.jpg" alt="Angry Bird"></a>
+    <a href="pong.html"><img src="pong.jpg" alt="Ping Pong"></a>
+    <a href="space.html"><img src="space.jpg" alt="Space Shooter"></a>
+    <a href="tictac.html"><img src="xo.jpg" alt="Tic Tac Toe"></a>
+    <a href="rock.html"><img src="rock.jpg" alt="Rock Paper Scissors"></a>
+  </div>
+  <footer>
+    © 2025 ASKINFOTECH. All rights reserved.
+  </footer>
 </body>
 </html>
