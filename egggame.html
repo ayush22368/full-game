@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Egg Catcher Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-user-select: none; /* Disable text selection */
+      -ms-user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent; /* Disable tap highlight */
+    }
+
+    body {
+      background: #f2f2f2;
+      font-family: Arial, sans-serif;
+      overflow: hidden; /* Prevent scrolling */
+    }
+
+    .game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      background: linear-gradient(to top, #a3d7ff, #ffffff);
+      cursor: grab; /* Indicate grabbable on desktop */
+    }
+    .game-container.dragging {
+      cursor: grabbing; /* Indicate grabbing state */
+    }
+
+    .basket {
+      position: absolute;
+      bottom: 75px;
+      width: 80px; /* Basket width */
+      height: auto;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      touch-action: none; /* Prevent default touch actions like scrolling on the basket */
+    }
+
+    .egg { /* This class applies to regular, hatched, and golden eggs */
+      position: absolute;
+      /* Base width (used as reference for scaling) */
+      width: 40px;
+      height: auto;/* Maintain aspect ratio */
+      transform-origin: center center;
+      pointer-events: none; /* Eggs should not interfere with basket dragging */
+    }
+
+    /* Other styles remain the same */
+    .egg-sparkle { position: absolute; width: 60px; height: 60px; background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 70%); border-radius: 50%; opacity: 0; pointer-events: none; z-index: 5; animation: sparkle 0.6s ease-out forwards; }
+    @keyframes sparkle { 0% { transform: scale(0.5); opacity: 0.8; } 100% { transform: scale(1.5); opacity: 0; } }
+    .egg-splash { position: absolute; width: 40px; height: 40px; background: radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(255,248,220,0.7) 40%, rgba(255,248,220,0) 70%); border-radius: 50%; opacity: 0; animation: splash 0.5s ease-out forwards; pointer-events: none; }
+    @keyframes splash { 0% { transform: scale(0.2); opacity: 0.9; } 100% { transform: scale(2); opacity: 0; } }
+    .scoreboard { position: absolute; top: 10px; left: 10px; font-size: 20px; font-weight: bold; background: rgba(255, 255, 255, 0.8); padding: 10px; border-radius: 10px; z-index: 20; pointer-events: none; }
+    .game-over { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; text-align: center; border: 2px solid #333; border-radius: 10px; display: none; z-index: 30; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+    .game-over h2 { margin-bottom: 20px; }
+    .play-again { padding: 10px 20px; font-size: 16px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; transition: all 0.2s; }
+    .play-again:hover { background: #218838; transform: scale(1.05); }
+    .wind-indicator { position: absolute; top: 60px; left: 10px; font-size: 14px; background: rgba(255,255,255,0.7); padding: 5px 10px; border-radius: 10px; display: none; z-index: 15; animation: fadeInOut 3s ease-in-out; pointer-events: none; }
+    @keyframes fadeInOut { 0%, 100% { opacity: 0; } 10%, 90% { opacity: 1; } }
+
+  </style>
+</head>
+<body>
+
+  <div class="game-container" id="game">
+    <div class="scoreboard">Score: <span id="score">0</span> | Dropped: <span id="dropped">0/10</span></div>
+    <!-- Image Reminder -->
+    <!-- MAKE SURE you have 'basket-Photoroom.png', 'egg.png', 'hatched.png', and 'golden-egg.png' -->
+    <img src="basket-Photoroom.png" class="basket" id="basket">
+    <div class="wind-indicator" id="windIndicator"><span id="windDirection"></span> Wind</div>
+
+    <div class="game-over" id="gameOverPopup">
+      <h2>Game Over!</h2>
+      <p>Your Score: <span id="finalScore">0</span></p>
+      <button class="play-again" onclick="restartGame()">Play Again</button>
+    </div>
+
+    <!-- ADDED FOR SOUND: Audio elements (hidden by default) -->
+    <!-- Make sure you have these sound files in a 'sounds' folder or update the src paths -->
+    <audio id="catchSound" preload="auto">
+      <source src="pointscore.mp3" type="audio/mpeg">
+      <!-- <source src="sounds/catch.wav" type="audio/wav"> -->
+      Your browser does not support the audio element.
+    </audio>
+    <audio id="gameOverSound" preload="auto">
+      <source src="gameover.mp3" type="audio/mpeg">
+      <!-- <source src="sounds/game_over.wav" type="audio/wav"> -->
+      Your browser does not support the audio element.
+    </audio>
+    <!-- END ADDED FOR SOUND -->
+
+  </div>
+
+  <script>
+    const game = document.getElementById('game');
+    const basket = document.getElementById('basket');
+    const scoreText = document.getElementById('score');
+    const droppedText = document.getElementById('dropped');
+    const gameOverPopup = document.getElementById('gameOverPopup');
+    const finalScore = document.getElementById('finalScore');
+    const windIndicator = document.getElementById('windIndicator');
+    const windDirectionText = document.getElementById('windDirection');
+
+    // ADDED FOR SOUND: Get references to audio elements
+    const catchSound = document.getElementById('catchSound');
+    const gameOverSound = document.getElementById('gameOverSound');
+    // END ADDED FOR SOUND
+
+    let score = 0;
+    let missed = 0;
+    const MAX_MISSED = 10; // Max drops allowed
+    let baseSpeed = 1.5;
+    let gameInterval;
+    let activeEggs = 0;
+    let maxEggs = 3;
+    let moveDirection = null;
+    let lastSpawnTime = 0;
+    let spawnCooldown = 800;
+    let difficultyLevel = 1;
+
+    let recentPositions = [];
+    const maxRecentPositions = 3;
+
+    let basketWidth = 80;
+    let gameWidth = window.innerWidth;
+
+    let windStrength = 0;
+    let windChangeTimeout = null;
+
+    const eggAnimations = new Map();
+
+    let isDragging = false;
+    let initialTouchX = 0;
+    let initialBasketLeft = 0;
+
+    // --- Controls --- (No changes)
+    document.addEventListener('keydown', (e) => { if (!isGameRunning) return; if (e.key === 'ArrowLeft') moveDirection = 'left'; if (e.key === 'ArrowRight') moveDirection = 'right'; });
+    document.addEventListener('keyup', (e) => { if (!isGameRunning) return; if (e.key === 'ArrowLeft' && moveDirection === 'left') moveDirection = null; if (e.key === 'ArrowRight' && moveDirection === 'right') moveDirection = null; });
+    basket.addEventListener('touchstart', (e) => { if (!isGameRunning) return; isDragging = true; moveDirection = null; initialTouchX = e.touches[0].clientX; initialBasketLeft = basket.offsetLeft; game.classList.add('dragging'); basketWidth = basket.offsetWidth; e.preventDefault(); }, { passive: false });
+    basket.addEventListener('touchmove', (e) => { if (!isDragging || !isGameRunning) return; const currentTouchX = e.touches[0].clientX; const deltaX = currentTouchX - initialTouchX; let newLeft = initialBasketLeft + deltaX; gameWidth = window.innerWidth; const maxLeft = gameWidth - basketWidth; newLeft = Math.max(0, Math.min(newLeft, maxLeft)); basket.style.left = `${newLeft}px`; e.preventDefault(); }, { passive: false });
+    basket.addEventListener('touchend', (e) => { if (!isDragging) return; isDragging = false; game.classList.remove('dragging'); });
+    basket.addEventListener('touchcancel', (e) => { if (!isDragging) return; isDragging = false; game.classList.remove('dragging'); });
+
+    // --- Basket Movement --- (No changes)
+    function moveBasketKeyboard() { if (!isGameRunning || isDragging) return; let currentLeft = basket.offsetLeft; basketWidth = basket.offsetWidth; gameWidth = window.innerWidth; if (moveDirection === 'left' && currentLeft > 0) { basket.style.left = `${Math.max(0, currentLeft - 8)}px`; } else if (moveDirection === 'right' && currentLeft < gameWidth - basketWidth) { basket.style.left = `${Math.min(gameWidth - basketWidth, currentLeft + 8)}px`; } }
+
+    // --- Game Logic --- (No changes in these specific functions)
+    function updateDifficulty() { if (score < 8) { difficultyLevel = 1; maxEggs = 2; spawnCooldown = 800; baseSpeed = 1.5; } else if (score < 20) { difficultyLevel = 2; maxEggs = 3; spawnCooldown = 700; baseSpeed = 1.7; } else if (score < 35) { difficultyLevel = 3; maxEggs = 4; spawnCooldown = 600; baseSpeed = 1.9; } else if (score < 50) { difficultyLevel = 4; maxEggs = 5; spawnCooldown = 500; baseSpeed = 2.1; } else { difficultyLevel = 5; maxEggs = 6; spawnCooldown = 400; baseSpeed = 2.3; } updateSpawnInterval(); }
+    function updateWind() { if (windChangeTimeout) clearTimeout(windChangeTimeout); const windChance = 0.1 + (difficultyLevel * 0.05); if (Math.random() < windChance) { windStrength = (Math.random() * 2.5 - 1.25) * (1 + difficultyLevel / 4); windIndicator.style.display = 'block'; windDirectionText.textContent = windStrength < 0 ? "Left" : "Right"; windIndicator.style.animation = 'none'; void windIndicator.offsetWidth; windIndicator.style.animation = 'fadeInOut 3s ease-in-out'; } else { windStrength = 0; if(windIndicator) windIndicator.style.display = 'none'; } if (isGameRunning) { windChangeTimeout = setTimeout(updateWind, 4000 + Math.random() * 8000); } }
+    function updateSpawnInterval() { if (gameInterval) clearInterval(gameInterval); if (isGameRunning) { gameInterval = setInterval(() => { if (isGameRunning) spawnEgg(); else clearInterval(gameInterval); }, spawnCooldown / 2 ); } }
+    function spawnEgg() { const currentTime = Date.now(); if (activeEggs >= maxEggs || currentTime - lastSpawnTime < spawnCooldown) return; lastSpawnTime = currentTime; let objectCount = 1; const spawnChance = Math.random(); if (difficultyLevel >= 2 && spawnChance < 0.2 + (difficultyLevel * 0.04)) objectCount = 2; if (difficultyLevel >= 4 && spawnChance < 0.05 + (difficultyLevel * 0.03)) objectCount = 3; objectCount = Math.min(objectCount, maxEggs - activeEggs); let lastPositionSegment = -1; for (let i = 0; i < objectCount; i++) { setTimeout(() => { if (isGameRunning) { lastPositionSegment = createFallingObject(lastPositionSegment); } }, i * (150 + Math.random() * 100)); } }
+    function getUniquePosition(avoidSegment = -1) { gameWidth = window.innerWidth; const segments = 8; const segmentWidth = gameWidth / segments; let attempts = 0; let segment; const eggWidth = 40; do { segment = Math.floor(Math.random() * segments); attempts++; if (attempts > 15) break; } while (segment === avoidSegment || recentPositions.includes(segment)); recentPositions.push(segment); if (recentPositions.length > maxRecentPositions) recentPositions.shift(); const positionOffset = (segmentWidth - eggWidth) * (0.15 + Math.random() * 0.7); const position = (segment * segmentWidth) + positionOffset; return { pos: Math.max(0, Math.min(position, gameWidth - eggWidth - 10)), /* Adjust for largest egg size (50px) */ segment: segment }; }
+
+
+    // --- createFallingObject --- (No changes other than adding sound playback)
+    function createFallingObject(lastPositionSegment) {
+      if (activeEggs >= maxEggs || !isGameRunning) return lastPositionSegment;
+      activeEggs++;
+
+      const fallingObject = document.createElement('img');
+      fallingObject.classList.add('egg');
+
+      const spawnInfo = getUniquePosition(lastPositionSegment);
+      const leftPos = spawnInfo.pos;
+      fallingObject.style.left = `${leftPos}px`;
+      fallingObject.style.top = '-50px';
+
+      const randomCheck = Math.random();
+      const goldenChance = Math.min(0.15, 0.04 + difficultyLevel * 0.02);
+      const hatchChance = Math.min(0.50, 0.12 + difficultyLevel * 0.05);
+
+      let sizeScale = 1;
+      let objectType = 'regular';
+
+      if (randomCheck < goldenChance) {
+          objectType = 'golden';
+          fallingObject.src = 'golden-egg.png';
+          const fixedGoldenWidth = 42;
+          fallingObject.style.width = `${fixedGoldenWidth}px`;
+          sizeScale = fixedGoldenWidth / 40; // 1.05
+
+      } else if (randomCheck < goldenChance + hatchChance) {
+          objectType = 'hatched';
+          fallingObject.src = 'hatched.png';
+          const fixedHatchedWidth = 50; // Keep hatched larger
+          fallingObject.style.width = `${fixedHatchedWidth}px`;
+          sizeScale = fixedHatchedWidth / 40; // 1.25
+
+      } else {
+          objectType = 'regular';
+          fallingObject.src = 'egg.png';
+          const sizeVariation = Math.random() * 0.25 + 0.85;
+          const variedWidth = Math.round(40 * sizeVariation);
+          fallingObject.style.width = `${variedWidth}px`;
+          sizeScale = sizeVariation;
+      }
+
+      fallingObject.dataset.type = objectType;
+
+      const initialRotation = Math.random() * 30 - 15;
+      fallingObject.style.transform = `rotate(${initialRotation}deg) scale(${sizeScale})`;
+
+      const movementType = Math.floor(Math.random() * 4) + 1;
+      game.appendChild(fallingObject);
+
+      // Speed, velocity, rotation etc.
+      const speedVariation = Math.random() * 0.6;
+      let objectSpeed = Math.max(baseSpeed + speedVariation, 1.5);
+      let verticalVelocity = objectSpeed;
+      const gravity = 0.03 + (0.008 * difficultyLevel);
+      let horizontalVelocity = 0;
+      let rotationSpeed = (Math.random() * 2 - 1) * (0.5 + difficultyLevel * 0.15);
+      let currentRotation = initialRotation;
+      const swingAmplitude = Math.random() * 2.5 * (1 + difficultyLevel / 2);
+      const swingSpeed = Math.random() * 0.05 + 0.02;
+      let swingOffset = Math.random() * Math.PI * 2;
+      const zigzagPeriod = Math.random() * 100 + 80;
+      const zigzagAmplitude = Math.random() * 1.5 * (1 + difficultyLevel / 2);
+
+      const currentObject = fallingObject;
+
+      function animateFallingObject(timestamp) {
+        // Animation loop unchanged until collision checks
+        if (!eggAnimations.has(currentObject) || !isGameRunning) { if(currentObject.parentNode) currentObject.remove(); return; }
+        let top = parseFloat(currentObject.style.top) || -50; let left = parseFloat(currentObject.style.left) || leftPos;
+        verticalVelocity += gravity; top += verticalVelocity;
+        let baseHorizontalVelocity = 0;
+        switch(movementType) { case 1: baseHorizontalVelocity = 0; break; case 2: baseHorizontalVelocity = Math.sin(top * swingSpeed + swingOffset) * swingAmplitude; break; case 3: baseHorizontalVelocity = Math.sin(top / zigzagPeriod * Math.PI * 2) * zigzagAmplitude; break; case 4: baseHorizontalVelocity = Math.sin(top * swingSpeed + swingOffset) * swingAmplitude; break; }
+        horizontalVelocity = baseHorizontalVelocity + (windStrength * 0.3); left += horizontalVelocity;
+        gameWidth = window.innerWidth; const objectWidth = currentObject.offsetWidth;
+        if (left < 0) { left = 0; if (horizontalVelocity < 0) horizontalVelocity *= -0.5; } else if (left > gameWidth - objectWidth) { left = gameWidth - objectWidth; if (horizontalVelocity > 0) horizontalVelocity *= -0.5; }
+        currentRotation += rotationSpeed;
+        currentObject.style.top = `${top}px`; currentObject.style.left = `${left}px`;
+        const currentSizeScale = parseFloat(currentObject.style.width || '40') / 40; currentObject.style.transform = `rotate(${currentRotation}deg) scale(${currentSizeScale})`;
+        let objectBottom = top + currentObject.offsetHeight; let basketTop = basket.offsetTop; let basketHeight = basket.offsetHeight; let basketLeft = basket.offsetLeft; basketWidth = basket.offsetWidth; let basketRight = basketLeft + basketWidth; let objectLeft = left; let objectRight = objectLeft + objectWidth; let objectCenterY = top + currentObject.offsetHeight / 2;
+
+        // Catch logic: ADDED SOUND PLAYBACK
+        if (objectCenterY > basketTop && objectBottom < (basketTop + basketHeight * 0.8) && objectLeft < (basketRight - 10) && objectRight > (basketLeft + 10)) {
+            const caughtObjectType = currentObject.dataset.type;
+            eggAnimations.delete(currentObject);
+            activeEggs--;
+            currentObject.remove();
+
+            if (caughtObjectType === 'hatched') {
+                gameOver(); // Hatched ends the game, sound played in gameOver()
+            } else {
+                // ADDED FOR SOUND: Play catch sound for regular and golden eggs
+                if (catchSound) {
+                    catchSound.currentTime = 0; // Rewind to start
+                    catchSound.play();
+                }
+                // END ADDED FOR SOUND
+
+                // Existing score logic
+                if (caughtObjectType === 'golden') {
+                    score += 5;
+                } else {
+                    score++;
+                }
+                scoreText.innerText = score;
+                createCatchEffect(left + objectWidth / 2, basketTop + 10);
+                updateDifficulty();
+            }
+            return; // Exit animation loop for this object
+        }
+        // Miss logic unchanged
+        else if (top > window.innerHeight) {
+             const missedObjectType = currentObject.dataset.type;
+             eggAnimations.delete(currentObject);
+             activeEggs--;
+             createSplashEffect(left + objectWidth / 2, window.innerHeight - 10);
+             currentObject.remove();
+             if (missedObjectType !== 'hatched' && missedObjectType !== 'golden') { // Only regular eggs count as dropped
+                 missed++;
+                 droppedText.innerText = `${missed}/${MAX_MISSED}`;
+                 if (missed >= MAX_MISSED) {
+                     gameOver();
+                 }
+             }
+             return; // Exit animation loop for this object
+        }
+        // Continue animation if not caught or missed
+        else {
+             const requestId = requestAnimationFrame(animateFallingObject);
+             eggAnimations.set(currentObject, requestId);
+        }
+      }
+      const initialRequestId = requestAnimationFrame(animateFallingObject);
+      eggAnimations.set(currentObject, initialRequestId);
+
+      return spawnInfo.segment;
+    }
+    // --- END OF FUNCTION WITH CHANGES ---
+
+
+    function createCatchEffect(x, y) { const sparkle = document.createElement('div'); sparkle.classList.add('egg-sparkle'); sparkle.style.left = `${x - 30}px`; sparkle.style.top = `${y - 30}px`; game.appendChild(sparkle); setTimeout(() => { if (sparkle.parentNode) sparkle.remove(); }, 600); }
+    function createSplashEffect(x, y) { const splash = document.createElement('div'); splash.classList.add('egg-splash'); splash.style.left = `${x - 20}px`; splash.style.top = `${y - 20}px`; game.appendChild(splash); setTimeout(() => { if (splash.parentNode) splash.remove(); }, 500); }
+
+    // --- Game State Management --- (Added sound to gameOver)
+    let mainGameLoopId = null; let isGameRunning = false;
+    function gameOver() {
+      if (!isGameRunning) return;
+      console.log("Game Over triggered");
+
+      // ADDED FOR SOUND: Play game over sound
+      if (gameOverSound) {
+          gameOverSound.currentTime = 0; // Rewind to start
+          gameOverSound.play();
+      }
+      // END ADDED FOR SOUND
+
+      isGameRunning = false;
+      clearInterval(gameInterval);
+      gameInterval = null;
+      if (windChangeTimeout) clearTimeout(windChangeTimeout);
+      windChangeTimeout = null;
+      if (mainGameLoopId) cancelAnimationFrame(mainGameLoopId);
+      mainGameLoopId = null;
+
+      // Clear all animations and remove eggs/effects
+      eggAnimations.forEach((requestId, eggElement) => {
+        cancelAnimationFrame(requestId);
+        if (eggElement.parentNode) eggElement.remove();
+      });
+      eggAnimations.clear();
+      document.querySelectorAll('.egg-sparkle, .egg-splash').forEach(el => el.remove()); // Also remove effects
+
+      isDragging = false;
+      game.classList.remove('dragging');
+      moveDirection = null;
+      activeEggs = 0; // Reset active eggs count
+
+      // Show game over popup
+      finalScore.innerText = score;
+      gameOverPopup.style.display = 'block';
+    }
+    function restartGame() { if (isGameRunning) gameOver(); // Ensure game stops fully first, which plays game over sound
+        // Stop any lingering sounds if needed (optional, usually not necessary)
+        // if (catchSound) catchSound.pause();
+        // if (gameOverSound) gameOverSound.pause();
+
+        clearInterval(gameInterval); gameInterval = null;
+        if (windChangeTimeout) clearTimeout(windChangeTimeout); windChangeTimeout = null;
+        if (mainGameLoopId) cancelAnimationFrame(mainGameLoopId); mainGameLoopId = null;
+
+        gameOverPopup.style.display = 'none';
+        document.querySelectorAll('.egg, .egg-sparkle, .egg-splash').forEach(el => el.remove()); // Clear any remaining eggs/effects
+        eggAnimations.clear(); // Clear animation map
+
+        score = 0; missed = 0; activeEggs = 0; difficultyLevel = 1; updateDifficulty();
+        recentPositions = []; windStrength = 0; if(windIndicator) windIndicator.style.display = 'none';
+        scoreText.innerText = score; droppedText.innerText = `${missed}/${MAX_MISSED}`;
+
+        moveDirection = null; isDragging = false; game.classList.remove('dragging');
+        isGameRunning = false; // Ensure state is reset before starting
+        mainGameLoopId = null;
+        startGame();
+    }
+     function startGame() { if (isGameRunning) return;
+        isGameRunning = true;
+        basket.style.left = `50%`; // Center initially
+        basket.style.transform = 'translateX(-50%)'; // Use transform for centering
+
+        // Need a slight delay for the browser to apply initial styles before getting offsetWidth
+        setTimeout(() => {
+            if (!basket || !isGameRunning) return; // Check if still relevant
+            gameWidth = window.innerWidth;
+            basketWidth = basket.offsetWidth;
+            const initialLeft = gameWidth / 2 - basketWidth / 2;
+            basket.style.left = `${initialLeft}px`; // Set precise pixel position
+            basket.style.transform = 'none'; // Remove transform after positioning
+        }, 10); // Small delay
+
+        moveDirection = null; isDragging = false; game.classList.remove('dragging');
+        gameWidth = window.innerWidth;
+
+        updateDifficulty();
+        updateWind();
+        updateSpawnInterval(); // Start spawning
+
+        function gameLoop() {
+            if (!isGameRunning) {
+                mainGameLoopId = null; // Ensure loop reference is cleared
+                return; // Stop the loop if game ended
+            }
+            moveBasketKeyboard();
+            mainGameLoopId = requestAnimationFrame(gameLoop);
+        }
+        // Start the main game loop only if it's not already running
+        if (!mainGameLoopId) {
+            gameLoop();
+        }
+     }
+    window.addEventListener('resize', () => { gameWidth = window.innerWidth; if (basket) { basketWidth = basket.offsetWidth; let currentLeft = basket.offsetLeft; const maxLeft = gameWidth - basketWidth; basket.style.left = `${Math.max(0, Math.min(currentLeft, maxLeft))}px`; } });
+
+    // Corrected DOMContentLoaded Listener
+    document.addEventListener('DOMContentLoaded', () => {
+        const basketImg = document.getElementById('basket');
+        const eggImgPreload = new Image();
+        eggImgPreload.src = 'egg.png';
+        const hatchedImgPreload = new Image();
+        hatchedImgPreload.src = 'hatched.png';
+        const goldenImgPreload = new Image();
+        goldenImgPreload.src = 'golden-egg.png';
+
+        if (basketImg && basketImg.complete) {
+            startGame();
+        } else if (basketImg) {
+            basketImg.onload = startGame;
+            basketImg.onerror = () => {
+                alert("Error: Could not load game assets.");
+            };
+        } // <-- CORRECTED: Added missing closing brace here
+        else {
+            alert("Error: Game initialization failed.");
+        }
+    }); // End of DOMContentLoaded Listener
+
+  </script>
+</body>
+</html>

@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rock Paper Scissors Arena</title>
+    <style>
+        /* --- Base styles --- */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: linear-gradient(135deg, #232526 0%, #414345 100%);
+            color: #e0e0e0;
+            margin: 0;
+            padding: 10px;
+            box-sizing: border-box;
+            min-height: 100vh;
+        }
+
+        .container {
+            background: linear-gradient(145deg, #4a4e5a, #3c404c);
+            border-radius: 15px;
+            box-shadow:
+                0 0 25px rgba(0, 255, 255, 0.15),
+                inset 0 1px 2px rgba(255, 255, 255, 0.1),
+                inset 0 -1px 1px rgba(0, 0, 0, 0.4);
+            padding: 25px 20px;
+            text-align: center;
+            max-width: 650px;
+            width: 95%;
+            margin-top: 15px;
+            border: 1px solid #6a7387;
+            border-top-color: #7b859a;
+            position: relative; /* Needed for absolute positioning of overlay */
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            flex-grow: 1;
+        }
+
+        h1 {
+            color: #00e5ff;
+            margin-top: 0;
+            margin-bottom: 25px; /* Increased margin from last request */
+            font-size: 1.8em;
+            font-weight: bold;
+            text-shadow: 0 0 8px rgba(0, 229, 255, 0.5);
+            flex-shrink: 0;
+        }
+
+        .score {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+            font-size: 1.1em;
+            color: #e0e0e0;
+            font-weight: 600;
+            background-color: rgba(0, 0, 0, 0.2);
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #555;
+            flex-shrink: 0;
+        }
+         .score span {
+            color: #f0ad4e;
+            font-weight: bold;
+         }
+
+        .choices {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-shrink: 0;
+        }
+
+        .choice-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 5px;
+            transition: transform 0.2s ease-in-out, opacity 0.2s ease-in-out;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+         .choice-btn:hover:not(:disabled) img {
+             box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+         }
+        .choice-btn:hover:not(:disabled) {
+            transform: scale(1.12);
+        }
+
+        .choice-btn:disabled {
+            cursor: not-allowed;
+            opacity: 0.45;
+        }
+         .choice-btn:disabled:hover {
+             transform: none;
+         }
+         .choice-btn:disabled:hover img {
+             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+         }
+
+        .choice-btn img {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            margin-bottom: 5px;
+            background-color: #dbe0e4;
+            border: 2px solid #aaa;
+            transition: box-shadow 0.2s ease-in-out;
+        }
+
+        .choice-label {
+            font-size: 0.9em;
+            color: #b0bec5;
+            font-weight: 600;
+            margin-top: 5px;
+        }
+
+        .result {
+            min-height: 1.5em;
+            font-size: 1.4em;
+            font-weight: bold;
+            color: #ffd700;
+            margin-bottom: 15px;
+            animation: fadeInOut 1.2s ease-in-out infinite alternate;
+            flex-shrink: 0;
+        }
+        .result.inactive {
+            animation: none;
+             color: #f0f0f0;
+        }
+
+        .hands {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            margin-bottom: 15px;
+            min-height: 75px;
+            flex-shrink: 0;
+        }
+        .hands span { /* VS text */
+             font-size: 1.3em;
+             font-weight: bold;
+             color: #ff4d4d;
+             text-shadow: 0 0 5px rgba(255, 77, 77, 0.5);
+        }
+
+        .hand {
+            width: 70px;
+            height: 70px;
+            opacity: 0;
+            transform: translateY(0);
+        }
+        .hand.show {
+             opacity: 1;
+        }
+        .hand.show img {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            box-shadow: 0 0 18px rgba(255, 255, 255, 0.4);
+             background-color: #e8ecef;
+            border: 2px solid #fff;
+        }
+
+        .message { /* 'First to 5 points...' text */
+            font-style: normal;
+            color: #9e9e9e;
+            margin-top: 10px;
+            font-size: 0.95em;
+            margin-bottom: 15px;
+            flex-shrink: 0;
+        }
+
+        /* Winner message (default state) */
+        #winner-message {
+            min-height: 1.8em; /* Ensure space even when empty initially */
+            font-size: 1.7em;
+            font-weight: bold;
+            color: #00ff7f;
+            /* margin-bottom: 15px; Don't set here, set only when inside overlay */
+            text-shadow: 0 0 10px rgba(0, 255, 127, 0.6);
+            flex-shrink: 0;
+            animation: pulse 1s ease-in-out infinite alternate;
+        }
+        #winner-message:empty {
+             min-height: 0;
+             margin-bottom: 0; /* Remove margin if empty */
+             animation: none;
+        }
+
+        /* Start New Game Button (default state) */
+        .start-new-game-btn {
+            background: linear-gradient(145deg, #00aeff, #007bff);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            display: none; /* Hidden by default (controlled by JS) */
+            margin-top: 15px; /* Default margin when not in overlay */
+            margin-bottom: 5px;
+            box-shadow: 0 4px 10px rgba(0, 174, 255, 0.3);
+            text-transform: uppercase;
+            flex-shrink: 0;
+        }
+        .start-new-game-btn:hover {
+            background: linear-gradient(145deg, #009ae0, #006acc);
+            transform: scale(1.03) translateY(-2px);
+            box-shadow: 0 6px 15px rgba(0, 174, 255, 0.4);
+        }
+        .start-new-game-btn:active {
+             transform: scale(0.99) translateY(0);
+             box-shadow: 0 2px 5px rgba(0, 174, 255, 0.2);
+        }
+
+        /* --- Game Over Overlay --- */
+        .game-over-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(30, 35, 45, 0.7);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            display: none; /* Hidden by default */
+            justify-content: center; /* Center content vertically */
+            align-items: center; /* Center content horizontally */
+            flex-direction: column; /* Stack message and button */
+            z-index: 10;
+            border-radius: 15px; /* Match container rounding */
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        /* --- Styles when game is over --- */
+        .game-over .game-over-overlay {
+            display: flex; /* Show the overlay */
+        }
+
+        /* Style winner message specifically WHEN INSIDE the overlay */
+        .game-over-overlay #winner-message {
+             /* No position/z-index needed */
+             margin-top: 0; /* Reset margin */
+             margin-bottom: 25px; /* Space below message */
+             font-size: 2em; /* Size for overlay */
+             /* Inherits color, text-shadow, etc. */
+             animation: pulse 1s ease-in-out infinite alternate; /* Ensure animation */
+        }
+         .game-over-overlay #winner-message:empty {
+             margin-bottom: 0;
+             min-height: 0;
+             display: none;
+         }
+
+        /* Style Start New Game button specifically WHEN INSIDE the overlay */
+        .game-over-overlay .start-new-game-btn {
+            /* No position/z-index needed */
+            display: inline-block; /* Ensure it's visible */
+            margin-top: 0; /* Reset margin */
+            /* Inherits base button styles */
+        }
+
+
+        /* --- Keyframes --- */
+        @keyframes fadeInOut {
+            0% { opacity: 0.7; transform: scale(1); text-shadow: 0 0 4px rgba(255,215,0,0.3); }
+            100% { opacity: 1; transform: scale(1.03); text-shadow: 0 0 10px rgba(255,215,0,0.6); }
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(1.04); opacity: 1; }
+        }
+
+
+        /* --- Mobile adjustments --- */
+        @media (max-width: 600px) {
+            body { padding: 5px; }
+            .container { padding: 15px 10px; margin-top: 10px; }
+            h1 { font-size: 1.5em; margin-bottom: 15px; } /* Adjusted h1 margin for mobile */
+            .score { font-size: 0.95em; margin-bottom: 15px; padding: 8px; flex-direction: column; gap: 3px; }
+            .choices { flex-direction: column; align-items: center; margin-bottom: 15px; gap: 10px; }
+            .choice-btn { margin-bottom: 0; padding: 3px; }
+            .choice-btn img { width: 60px; height: 60px; margin-bottom: 3px; }
+            .choice-label { font-size: 0.8em; margin-top: 3px; }
+            .hands { min-height: 65px; margin-bottom: 10px; }
+            .hands .hand { width: 60px; height: 60px; }
+            .hands span { font-size: 1.1em; }
+            .result { font-size: 1.2em; min-height: 1.3em; margin-bottom: 10px; }
+            #winner-message { font-size: 1.5em; min-height: 1.6em; margin-bottom: 10px; } /* Base style for mobile */
+            .message { font-size: 0.85em; margin-top: 5px; margin-bottom: 10px; }
+            .start-new-game-btn { font-size: 0.9em; padding: 8px 15px; margin-top: 10px; } /* Base style for mobile */
+
+            /* Adjust overlay elements for mobile */
+            .game-over-overlay #winner-message {
+                 font-size: 1.6em; /* Size in overlay on mobile */
+                 margin-bottom: 20px; /* Spacing in overlay on mobile */
+            }
+            .game-over-overlay .start-new-game-btn {
+                 font-size: 1em; /* Size in overlay on mobile */
+                 padding: 10px 20px;
+            }
+        }
+
+        @media (max-width: 400px) {
+            h1 { font-size: 1.3em; }
+            .choice-btn img { width: 55px; height: 55px; }
+            .hands .hand { width: 55px; height: 55px; }
+            .result { font-size: 1.1em; }
+            #winner-message { font-size: 1.4em; } /* Base style for small mobile */
+            .message { font-size: 0.8em;}
+
+            /* Adjust overlay elements for small mobile */
+            .game-over-overlay #winner-message {
+                 font-size: 1.4em; /* Size in overlay on small mobile */
+                 margin-bottom: 15px; /* Spacing in overlay on small mobile */
+             }
+            .game-over-overlay .start-new-game-btn {
+                 font-size: 0.9em; /* Size in overlay on small mobile */
+                 padding: 9px 18px;
+            }
+        }
+        /* --- END MOBILE --- */
+
+    </style>
+    <!-- End of head -->
+</head>
+<body > <!-- Class 'game-over' will be added/removed here -->
+
+    <div class="container">
+        <!-- h1, score, choices, hands, result -->
+        <h1>Rock Paper Scissors Arena</h1>
+
+        <div class="score">
+            <div>Player: <span id="player-score">0</span></div>
+            <div>Computer: <span id="computer-score">0</span></div>
+        </div>
+
+        <div class="choices">
+            <button class="choice-btn" data-choice="rock">
+                <img src="rock.png" alt="Rock">
+                <span class="choice-label">Rock</span>
+            </button>
+            <button class="choice-btn" data-choice="paper">
+                <img src="paper.png" alt="Paper">
+                <span class="choice-label">Paper</span>
+            </button>
+            <button class="choice-btn" data-choice="scissors">
+                <img src="scissors.png" alt="Scissors">
+                <span class="choice-label">Scissors</span>
+            </button>
+        </div>
+
+        <div class="hands">
+            <div class="hand" id="player-hand">
+                <img src="" alt="Player's Hand">
+            </div>
+            <span>vs</span>
+            <div class="hand" id="computer-hand">
+                <img src="" alt="Computer's Hand">
+            </div>
+        </div>
+
+        <div class="result" id="result-message">Make your choice!</div>
+
+        <!-- Winner message -->
+        <div class="winner-message" id="winner-message"></div>
+
+        <!-- Message -->
+        <div class="message">First to 5 points wins the match!</div>
+
+        <!-- Button -->
+        <button class="start-new-game-btn">Start New Game</button>
+
+        <!-- Overlay -->
+        <div class="game-over-overlay"></div>
+
+    </div> <!-- End of container -->
+
+    <!-- JavaScript Includes element moving logic -->
+    <script>
+        const choices = document.querySelectorAll('.choice-btn');
+        const playerScoreElem = document.getElementById('player-score');
+        const computerScoreElem = document.getElementById('computer-score');
+        const playerHandElem = document.getElementById('player-hand');
+        const computerHandElem = document.getElementById('computer-hand');
+        const resultMessageElem = document.getElementById('result-message');
+        const winnerMessageElem = document.getElementById('winner-message'); // Select by ID
+        const startNewGameButton = document.querySelector('.start-new-game-btn');
+        const container = document.querySelector('.container'); // Get container element
+        const messageElem = document.querySelector('.message'); // Get the info message element
+        const gameOverOverlay = document.querySelector('.game-over-overlay'); // Get the overlay
+        const rockImgSrc = 'rock.png'; // Make sure these images exist
+        const paperImgSrc = 'paper.png';
+        const scissorsImgSrc = 'scissors.png';
+
+        let playerScore = 0;
+        let computerScore = 0;
+        let gameActive = true;
+
+        startNewGameButton.addEventListener('click', resetGame);
+
+        function getComputerChoice() {
+            const options = ['rock', 'paper', 'scissors'];
+            const randomIndex = Math.floor(Math.random() * options.length);
+            return options [randomIndex];
+        }
+
+        function updateHands(playerChoice, computerChoice) {
+            playerHandElem.querySelector('img').src = getHandImage(playerChoice);
+            computerHandElem.querySelector('img').src = getHandImage(computerChoice);
+            playerHandElem.classList.add('show');
+            computerHandElem.classList.add('show');
+        }
+
+        function getHandImage(choice) {
+            switch (choice) {
+                case 'rock': return rockImgSrc;
+                case 'paper': return paperImgSrc;
+                case 'scissors': return scissorsImgSrc;
+                default: return '';
+            }
+        }
+
+        function determineWinner(playerChoice, computerChoice) {
+            if (playerChoice === computerChoice) {
+                return "It's a tie!";
+            } else if (
+                (playerChoice === 'rock' && computerChoice === 'scissors') ||
+                (playerChoice === 'paper' && computerChoice === 'rock') ||
+                (playerChoice === 'scissors' && computerChoice === 'paper')
+            ) {
+                playerScore++;
+                playerScoreElem.textContent = playerScore;
+                return 'You win!';
+            } else {
+                computerScore++;
+                computerScoreElem.textContent = computerScore;
+                return 'Computer wins!';
+            }
+        }
+
+        function checkGameStatus() {
+            let winnerDeclared = false;
+            if (playerScore >= 5 || computerScore >= 5) {
+                gameActive = false;
+                winnerDeclared = true;
+                resultMessageElem.textContent = '';
+                toggleChoiceButtons(false);
+
+                if (playerScore >= 5) {
+                    winnerMessageElem.textContent = 'You are the ultimate winner!';
+                } else {
+                    winnerMessageElem.textContent = 'The computer is the ultimate winner!';
+                }
+
+                // Move elements into overlay
+                gameOverOverlay.appendChild(winnerMessageElem);
+                gameOverOverlay.appendChild(startNewGameButton);
+
+                startNewGameButton.style.display = 'inline-block'; // Make button visible
+                document.body.classList.add('game-over'); // Add class to body to trigger overlay CSS
+            }
+        }
+
+        function toggleChoiceButtons(enable) {
+             choices.forEach(button => {
+                 button.disabled = !enable;
+             });
+        }
+
+        function playGame(playerChoice) {
+            if (!gameActive) {
+                return;
+            }
+            toggleChoiceButtons(false);
+
+            const computerChoice = getComputerChoice();
+            updateHands(playerChoice, computerChoice);
+
+            const result = determineWinner(playerChoice, computerChoice);
+            resultMessageElem.textContent = result;
+            resultMessageElem.classList.add('inactive');
+
+            checkGameStatus();
+
+            if (gameActive) {
+                setTimeout(() => {
+                    playerHandElem.classList.remove('show');
+                    computerHandElem.classList.remove('show');
+                    resultMessageElem.classList.remove('inactive');
+                    resultMessageElem.textContent = 'Make your choice!';
+                    toggleChoiceButtons(true);
+                }, 3000);
+            }
+        }
+
+        choices.forEach(choice => {
+            choice.addEventListener('click', function() {
+                if(gameActive) {
+                    playGame(this.dataset.choice);
+                }
+            });
+        });
+
+        function resetGame() {
+            playerScore = 0;
+            computerScore = 0;
+            playerScoreElem.textContent = playerScore;
+            computerScoreElem.textContent = computerScore;
+
+            // Clear text content BEFORE moving
+            winnerMessageElem.textContent = '';
+
+            // Move elements back to container in correct order
+            // Append winner message (it will be empty) before the info message
+            container.insertBefore(winnerMessageElem, messageElem);
+            // Append button after the info message
+            // Using insertBefore with null as the second argument is equivalent to appendChild if messageElem is the last child
+            // It's safer to find the overlay and insert before that if structure is complex,
+            // but insertBefore messageElem.nextSibling works if button should follow message.
+            container.insertBefore(startNewGameButton, messageElem.nextSibling || null);
+
+
+            playerHandElem.classList.remove('show');
+            computerHandElem.classList.remove('show');
+            resultMessageElem.classList.remove('inactive');
+            resultMessageElem.textContent = 'Make your choice!';
+            startNewGameButton.style.display = 'none'; // Hide button logically
+            gameActive = true;
+            toggleChoiceButtons(true);
+            document.body.classList.remove('game-over'); // Remove class from body
+        }
+
+        // Initial setup
+        resultMessageElem.classList.remove('inactive');
+        toggleChoiceButtons(true);
+        startNewGameButton.style.display = 'none';
+        document.body.classList.remove('game-over');
+
+    </script>
+</body>
+</html>

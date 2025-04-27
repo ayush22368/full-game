@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Flappy Crow</title>
+    <style>
+        body {
+            margin: 0; padding: 0; display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; background-color: #111; overflow: hidden;
+        }
+        canvas {
+            border: 1px solid black; display: block; background-color: #445566;
+            image-rendering: -moz-crisp-edges; image-rendering: -webkit-crisp-edges;
+            image-rendering: pixelated; image-rendering: crisp-edges;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const GAME_WIDTH = 320;
+        const GAME_HEIGHT = 480;
+        const GAME_ASPECT_RATIO = GAME_WIDTH / GAME_HEIGHT;
+
+        canvas.width = GAME_WIDTH;
+        canvas.height = GAME_HEIGHT;
+
+        let score = 0;
+        let gameState = 'ready'; // 'ready', 'playing', 'gameover'
+        let frames = 0; // Global frame counter
+        const DEGREE = Math.PI / 180;
+        const DEBUG_SHOW_HITBOXES = false; // Keep disabled
+
+        let assetsLoaded = 0;
+        // --- MODIFICATION START: Asset Count ---
+        const totalAssets = 6; // Changed from 4 to 6 (added 2 sounds)
+        // --- MODIFICATION END ---
+        let allAssetsLoaded = false;
+
+        function assetLoaded() {
+            assetsLoaded++;
+            if (assetsLoaded === totalAssets) {
+                allAssetsLoaded = true;
+                console.log("All assets loaded!");
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // --- Asset Loading ---
+        const bgImage = new Image(); bgImage.onload = assetLoaded; bgImage.src = 'background.png';
+        const groundImage = new Image(); groundImage.onload = assetLoaded; groundImage.src = 'ground.png';
+        const birdImage = new Image(); birdImage.onload = assetLoaded; birdImage.src = 'bird.png'; // Using the single crow image
+        const pipeImage = new Image(); pipeImage.onload = assetLoaded; pipeImage.src = 'pipe.png';
+        // --- MODIFICATION START: Sound Assets ---
+        const POINT_SOUND = new Audio('point.mp3');
+        POINT_SOUND.addEventListener('canplaythrough', assetLoaded, { once: true }); // Use canplaythrough for audio
+        const HIT_SOUND = new Audio('hit.mp3');
+        HIT_SOUND.addEventListener('canplaythrough', assetLoaded, { once: true });   // Use canplaythrough for audio
+        // --- MODIFICATION END ---
+
+        // --- Game Objects ---
+
+        const ground = {
+            sprite: groundImage, x: 0, y: GAME_HEIGHT - 112, width: 336, height: 112, dx: 2, // Verify dims
+            draw: function() { ctx.drawImage(this.sprite, this.x, this.y, this.width, this.height); ctx.drawImage(this.sprite, this.x + this.width, this.y, this.width, this.height); },
+            update: function() { if (gameState === 'playing') { this.x = (this.x - this.dx) % (this.width / 2); } }
+        };
+
+        const bird = {
+            sprite: birdImage,
+            animation: [ { sX: 0, sY: 0 }, { sX: 68, sY: 0 }, { sX: 136, sY: 0 }, { sX: 68, sY: 0 } ],
+            x: 50, y: 150,
+            baseWidth: 68,
+            baseHeight: 48,
+            scaleFactor: 0.5, width: 0, height: 0,
+            frame: 0,
+            period: 5,
+            gravity: 0.15, jump: 3.6, speed: 0, rotation: 0,
+
+            init: function() {
+                this.width = this.baseWidth * this.scaleFactor;
+                this.height = this.baseHeight * this.scaleFactor;
+            },
+
+            draw: function() { // <<< KEPT EXACTLY AS PROVIDED
+                // --- Reverted Draw Logic ---
+                ctx.save();
+                ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
+                ctx.rotate(this.rotation * DEGREE);
+                ctx.scale(-1, 1); // Flip horizontal if needed <<< KEPT AS IS
+
+                ctx.drawImage(
+                    this.sprite,
+                    -this.width / 2,
+                    -this.height / 2,
+                    this.width,
+                    this.height
+                );
+
+                ctx.restore();
+                // --- End Reverted Draw Logic ---
+            },
+
+            update: function() { // <<< KEPT EXACTLY AS PROVIDED
+                this.period = gameState === 'ready' ? 10 : 5;
+                this.frame += (frames % this.period === 0) ? 1 : 0;
+                this.frame = this.frame % this.animation.length;
+
+                if (gameState === 'ready') { this.y = 150; this.rotation = 0; this.speed = 0; }
+                else {
+                    this.speed += this.gravity; this.y += this.speed;
+                    if (this.y + this.height / 2 >= ground.y) { this.y = ground.y - this.height / 2; if (gameState === 'playing') { gameOver(); } }
+                    if (this.y - this.height / 2 <= 0) { this.y = this.height / 2; this.speed = 0; }
+                    if (this.speed >= this.jump) { this.rotation = Math.min(70, this.rotation + 4); } else if (this.speed < 0) { this.rotation = -25; } else { this.rotation = Math.min(70, this.rotation + 2); }
+                    if (this.y + this.height / 2 >= ground.y) { this.rotation = 70; }
+                }
+            },
+            flap: function() { if (this.y > this.height / 2 && gameState === 'playing') { this.speed = -this.jump; } }, // <<< KEPT EXACTLY AS PROVIDED (Note: Flap doesn't work in 'ready' state here)
+            reset: function() { this.speed = 0; this.y = 150; this.rotation = 0; this.frame = 0; }
+        };
+        bird.init();
+
+        const pipes = {
+            sprite: pipeImage, position: [],
+            width: 53, height: 400,
+            gap: 120, dx: 2,
+            minTopPipeBottomY: 50,
+            maxTopPipeBottomY: GAME_HEIGHT - ground.height - 50 - 120,
+
+            draw: function() { // <<< KEPT EXACTLY AS PROVIDED
+                for (let i = 0; i < this.position.length; i++) {
+                    let p = this.position[i];
+                    let topPipeBottomEdgeY = p.y;
+                    let bottomPipeTopEdgeY = p.y + this.gap;
+                    let topPipeDrawSourceY = topPipeBottomEdgeY - this.height; // Corrected calculation for top pipe draw Y
+                    ctx.save();
+                    // Draw top pipe (flipped) - Adjusted translate to match original intent likely
+                    ctx.translate(p.x + this.width / 2, topPipeBottomEdgeY); // Translate to center of bottom edge
+                    ctx.scale(1, -1); // Flip vertically
+                    ctx.drawImage(this.sprite, -this.width / 2, 0, this.width, this.height); // Draw relative to new origin
+                    ctx.restore();
+                    // Draw bottom pipe
+                    ctx.drawImage(this.sprite, p.x, bottomPipeTopEdgeY, this.width, this.height);
+                }
+            },
+            update: function() { // <<< MODIFIED ONLY TO ADD SOUND
+                if (gameState !== 'playing') return;
+                if (frames % 120 === 0) {
+                    let randomTopPipeBottomY = this.minTopPipeBottomY + Math.random() * (this.maxTopPipeBottomY - this.minTopPipeBottomY);
+                    this.position.push({ x: GAME_WIDTH, y: randomTopPipeBottomY, passed: false });
+                }
+                for (let i = this.position.length - 1; i >= 0; i--) {
+                    let p = this.position[i]; p.x -= this.dx;
+                    let pipeLeft = p.x; let pipeRight = p.x + this.width;
+                    let topPipeBottomEdgeY = p.y; let bottomPipeTopEdgeY = p.y + this.gap;
+                    const birdLeft = bird.x; const birdRight = bird.x + bird.width;
+                    const birdTop = bird.y; const birdBottom = bird.y + bird.height;
+                    if (birdRight > pipeLeft && birdLeft < pipeRight) {
+                        if (birdTop < topPipeBottomEdgeY) { gameOver(); return; }
+                        if (birdBottom > bottomPipeTopEdgeY) { gameOver(); return; }
+                    }
+                    if (!p.passed && pipeRight < birdLeft) {
+                        score++;
+                        p.passed = true;
+                        // --- MODIFICATION START: Play Point Sound ---
+                        POINT_SOUND.currentTime = 0;
+                        POINT_SOUND.play().catch(e => console.error("Error playing point sound:", e)); // Optional error catch
+                        // --- MODIFICATION END ---
+                    }
+                    if (pipeRight <= 0) { this.position.splice(i, 1); }
+                }
+            },
+            reset: function() { this.position = []; }
+        };
+
+        // Messages & Score Display (Arial Font)
+        const message = { // <<< KEPT EXACTLY AS PROVIDED
+             drawReady: function() { if (gameState === 'ready') { ctx.fillStyle = "#FFF"; ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.font = "bold 30px Arial"; ctx.textAlign = "center"; ctx.fillText("Get Ready", GAME_WIDTH / 2, GAME_HEIGHT / 2 - 50); ctx.strokeText("Get Ready", GAME_WIDTH / 2, GAME_HEIGHT / 2 - 50); ctx.font = "bold 20px Arial"; ctx.fillText("Tap or Space to Start", GAME_WIDTH / 2, GAME_HEIGHT / 2); ctx.strokeText("Tap or Space to Start", GAME_WIDTH / 2, GAME_HEIGHT / 2); } },
+             drawGameOver: function() { if (gameState === 'gameover') { ctx.fillStyle = "#FFF"; ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.font = "bold 40px Arial"; ctx.textAlign = "center"; ctx.fillText("Game Over", GAME_WIDTH / 2, GAME_HEIGHT / 2 - 50); ctx.strokeText("Game Over", GAME_WIDTH / 2, GAME_HEIGHT / 2 - 50); ctx.font = "bold 25px Arial"; ctx.fillText(`Score: ${score}`, GAME_WIDTH / 2, GAME_HEIGHT / 2); ctx.strokeText(`Score: ${score}`, GAME_WIDTH / 2, GAME_HEIGHT / 2); ctx.font = "bold 20px Arial"; ctx.fillText("Tap or Space to Retry", GAME_WIDTH / 2, GAME_HEIGHT / 2 + 40); ctx.strokeText("Tap or Space to Retry", GAME_WIDTH / 2, GAME_HEIGHT / 2 + 40); } }
+        };
+        function drawScore() { if (gameState === 'playing') { ctx.fillStyle = "#FFF"; ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.font = "bold 35px Arial"; ctx.textAlign = "center"; ctx.fillText(score, GAME_WIDTH / 2, 50); ctx.strokeText(score, GAME_WIDTH / 2, 50); } }
+
+        // --- Game State Management & Input ---
+        function resetGame() { bird.reset(); pipes.reset(); score = 0; frames = 0; gameState = 'ready'; }
+        function startGame() { if (gameState === 'ready') { gameState = 'playing'; } }
+        function gameOver() { // <<< MODIFIED ONLY TO ADD SOUND
+            if (gameState === 'playing') {
+                // --- MODIFICATION START: Play Hit Sound ---
+                HIT_SOUND.currentTime = 0;
+                HIT_SOUND.play().catch(e => console.error("Error playing hit sound:", e)); // Optional error catch
+                // --- MODIFICATION END ---
+                gameState = 'gameover';
+                /* HIT_SOUND.play(); */ // Original commented line left for reference if needed
+            }
+        }
+        function handleInput(event) { // <<< KEPT EXACTLY AS PROVIDED
+            if (event.type === 'touchstart') { event.preventDefault(); }
+            // Original logic: Flaps only work in 'playing' state, not to start the game
+            if (gameState === 'ready') { startGame(); /* bird.flap(); removed based on original flap function */ }
+            else if (gameState === 'playing') { bird.flap(); }
+            else if (gameState === 'gameover') { resetGame(); }
+        }
+        canvas.addEventListener('click', handleInput);
+        canvas.addEventListener('touchstart', handleInput, { passive: false });
+        window.addEventListener('keydown', function(e) { if (e.code === 'Space') { handleInput(e); e.preventDefault(); } });
+
+        // --- Canvas Resizing ---
+        function resizeCanvas() { // <<< KEPT EXACTLY AS PROVIDED
+            const windowWidth = window.innerWidth; const windowHeight = window.innerHeight;
+            const windowAspectRatio = windowWidth / windowHeight;
+            let newCanvasWidth; let newCanvasHeight;
+            if (windowAspectRatio > GAME_ASPECT_RATIO) { newCanvasHeight = windowHeight; newCanvasWidth = newCanvasHeight * GAME_ASPECT_RATIO; }
+            else { newCanvasWidth = windowWidth; newCanvasHeight = newCanvasWidth / GAME_ASPECT_RATIO; }
+            canvas.style.width = `${newCanvasWidth}px`; canvas.style.height = `${newCanvasHeight}px`;
+        }
+        resizeCanvas(); window.addEventListener('resize', resizeCanvas);
+
+        // --- Loading Screen ---
+        function drawLoadingScreen() { // <<< KEPT EXACTLY AS PROVIDED (but uses updated totalAssets)
+            ctx.fillStyle = '#333'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+            ctx.fillStyle = '#FFF'; ctx.font = "bold 20px Arial"; ctx.textAlign = "center";
+            ctx.fillText(`Loading Assets... ${assetsLoaded}/${totalAssets}`, GAME_WIDTH / 2, GAME_HEIGHT / 2); // Uses the updated totalAssets
+        }
+
+        // --- Main Game Loop ---
+        function gameLoop() { // <<< KEPT EXACTLY AS PROVIDED
+            if (!allAssetsLoaded) { drawLoadingScreen(); requestAnimationFrame(gameLoop); return; }
+
+            // Update
+            if (gameState === 'playing' || gameState === 'ready') { bird.update(); ground.update(); }
+            if (gameState === 'playing') { pipes.update(); } // Sound playing happens within pipes.update
+
+            // Draw
+            ctx.drawImage(bgImage, 0, 0, GAME_WIDTH, GAME_HEIGHT);
+            pipes.draw();
+            ground.draw();
+            bird.draw(); // Draws bird as originally intended (potentially flipped)
+
+            // UI
+            drawScore();
+            message.drawReady();
+            message.drawGameOver();
+
+            frames++;
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- Start ---
+        drawLoadingScreen();
+
+    </script>
+</body>
+</html>
